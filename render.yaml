@@ -1,0 +1,41 @@
+services:
+  # Backend API Server
+  - type: web
+    name: tedx-internship-backend
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: cd server && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: SPREADSHEET_ID
+        sync: false
+      - key: DRIVE_FOLDER_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: JAVASCRIPT_ORIGIN
+        sync: false
+      - key: SERVICE_ACCOUNT_KEY
+        sync: false
+
+  # Frontend React App
+  - type: web
+    name: tedx-internship-frontend
+    env: static
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
