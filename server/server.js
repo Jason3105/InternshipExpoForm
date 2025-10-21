@@ -128,20 +128,6 @@ const upload = multer({
   }
 });
 
-// Google API Configuration
-const SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file'
-];
-
-// Load credentials from the JSON file
-const credentials = require('./applications-form-testing-5a1cfd770b20.json');
-
-const auth = new google.auth.GoogleAuth({
-  credentials: credentials,
-  scopes: SCOPES,
-});
-
 // Google Sheets ID (extract from your sheet URL)
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1DK4xiaXtQ6FDSVZd0mBpgFwrcXVOQjXDbgNiXoVF1uA';
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1BMM2yhq7vsehgxfsZTRPVuuvmsPuKPgO';
