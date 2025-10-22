@@ -79,11 +79,21 @@ const oauth2Client = new google.auth.OAuth2(
 // Token storage path
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 
-// Load saved tokens if they exist
-if (fs.existsSync(TOKEN_PATH)) {
+// Load saved tokens from environment variable or file
+if (process.env.OAUTH_TOKENS) {
+  try {
+    const tokens = JSON.parse(process.env.OAUTH_TOKENS);
+    oauth2Client.setCredentials(tokens);
+    console.log('OAuth tokens loaded from environment variable');
+  } catch (err) {
+    console.error('Error parsing OAUTH_TOKENS from environment:', err.message);
+  }
+} else if (fs.existsSync(TOKEN_PATH)) {
   const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
   oauth2Client.setCredentials(token);
-  console.log('OAuth tokens loaded');
+  console.log('OAuth tokens loaded from file');
+} else {
+  console.warn('⚠️  No OAuth tokens found! Please visit /auth to authorize the application.');
 }
 
 // Helper function to get company name from ID
@@ -150,12 +160,45 @@ app.get('/oauth2callback', async (req, res) => {
     
     // Save tokens to file
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-    console.log('Tokens saved successfully');
+    console.log('Tokens saved to file successfully');
     
-    res.send('Authorization successful! You can close this window and return to the application.');
+    // Display tokens for adding to environment variable
+    res.send(`
+      <html>
+        <head><title>Authorization Successful</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto;">
+          <h2>✅ Authorization Successful!</h2>
+          <p>The application has been authorized to access Google Drive.</p>
+          
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3>⚠️ IMPORTANT: For Render Deployment</h3>
+            <p>To persist this authorization on Render, add the following environment variable:</p>
+            <p><strong>Variable Name:</strong> <code>OAUTH_TOKENS</code></p>
+            <p><strong>Value:</strong></p>
+            <textarea readonly style="width: 100%; height: 100px; font-family: monospace; font-size: 12px; padding: 10px;">${JSON.stringify(tokens)}</textarea>
+            <button onclick="navigator.clipboard.writeText('${JSON.stringify(tokens).replace(/'/g, "\\'")}'); alert('Copied to clipboard!');" 
+                    style="margin-top: 10px; padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+              Copy to Clipboard
+            </button>
+          </div>
+          
+          <p>Steps to add to Render:</p>
+          <ol>
+            <li>Go to your Render dashboard</li>
+            <li>Open your backend service</li>
+            <li>Go to "Environment" tab</li>
+            <li>Add new environment variable: <code>OAUTH_TOKENS</code></li>
+            <li>Paste the value from above</li>
+            <li>Save changes (this will redeploy your service)</li>
+          </ol>
+          
+          <p style="margin-top: 30px;">You can close this window now.</p>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Error getting tokens:', error);
-    res.status(500).send('Authorization failed');
+    res.status(500).send('Authorization failed: ' + error.message);
   }
 });
 
@@ -173,8 +216,20 @@ async function uploadToDrive(filePath, fileName, mimeType) {
   try {
     // Check if we have valid credentials
     if (!oauth2Client.credentials || !oauth2Client.credentials.access_token) {
-      throw new Error('OAuth not configured. Please visit http://localhost:5000/auth to authorize');
+      throw new Error('OAuth not configured. Please visit the /auth endpoint to authorize');
     }
+    
+    // Set up token refresh
+    oauth2Client.on('tokens', (tokens) => {
+      if (tokens.refresh_token) {
+        // Store the new refresh token
+        const currentTokens = oauth2Client.credentials;
+        const updatedTokens = { ...currentTokens, ...tokens };
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedTokens));
+        console.log('🔄 Tokens refreshed and saved to file');
+        console.log('⚠️  IMPORTANT: Update OAUTH_TOKENS environment variable in Render with:', JSON.stringify(updatedTokens));
+      }
+    });
     
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
     
@@ -334,19 +389,29 @@ app.post('/api/submit', upload.single('resume'), async (req, res) => {
     // Upload resume to Google Drive if file exists
     if (req.file) {
       resumeFileName = req.file.originalname;
+      console.log('Uploading resume to Drive...');
+      const fileName = `${req.body.name}_${Date.now()}${path.extname(req.file.originalname)}`;
+      
       try {
-        console.log('Uploading resume to Drive...');
-        const fileName = `${req.body.name}_${Date.now()}${path.extname(req.file.originalname)}`;
         resumeLink = await uploadToDrive(req.file.path, fileName, req.file.mimetype);
         console.log('Resume uploaded:', resumeLink);
         
         // Delete temporary file
         fs.unlinkSync(req.file.path);
       } catch (driveError) {
-        console.error('Drive upload failed, continuing without it:', driveError.message);
-        // Keep the file locally as backup
-        resumeLink = `Local file: ${resumeFileName}`;
-        // Don't delete the file if Drive upload failed
+        console.error('Drive upload failed:', driveError.message);
+        // Clean up temporary file
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+        
+        // Return error to client
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload resume to Google Drive. Please try again or contact support.',
+          error: driveError.message,
+          hint: 'The server may need to be re-authorized. Contact the administrator.'
+        });
       }
     }
     
