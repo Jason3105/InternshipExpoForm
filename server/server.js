@@ -146,6 +146,7 @@ const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1BMM2yhq7vsehgxfsZTRPVuu
 app.get('/auth', (req, res) => {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
+    prompt: 'consent', // Force consent screen to always get a fresh refresh token
     scope: SCOPES_DRIVE,
   });
   res.redirect(authUrl);
