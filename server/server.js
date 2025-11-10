@@ -349,6 +349,20 @@ async function appendToSheet(data) {
 
 // API Routes
 
+// Root endpoint for health checks (UptimeRobot, etc.)
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Internship Form API Server',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/auth',
+      submit: '/api/submit'
+    }
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
