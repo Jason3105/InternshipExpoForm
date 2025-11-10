@@ -29,3 +29,6 @@ server/applications-form-testing-*.json
 server/token.json
 server/uploads/
 *.json.backup
+server/service-account-base64.txt
+server/.env
+.env
